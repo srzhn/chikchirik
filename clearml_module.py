@@ -85,6 +85,7 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
         open("model_results.pkl", "wb")
     )
     task.upload_artifact("model_results", artifact_object='model_results.pkl')
+    return task
 
 
 def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger):
