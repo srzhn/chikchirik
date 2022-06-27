@@ -8,19 +8,20 @@ from sklearn.model_selection import KFold, ParameterGrid
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import numpy as np
 
-import clearml
+# import clearml
 from clearml import Dataset, Task
 
 from utils.storage import ClearMLStorage
 from utils.model import RegressionModel
 from utils.preprocessing import columns_for_deletion, split_train_test
 
+import warnings
+warnings.filterwarnings('ignore')
 
 
 def make_task(storage: ClearMLStorage):
-    import warnings
-    warnings.filterwarnings('ignore')
-    clearml.Task.add_requirements("pyarrow")
+    
+    Task.add_requirements("pyarrow")
     task = Task.init(**storage.task_init_params)
     task.connect(storage.dataset, name="dataset")
 
@@ -202,7 +203,7 @@ def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test):
     return model, dict_to_save
 
 
-def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper_params_dict, kflod_kwargs_hyper_params_dict,  queue_name='cpu'):
+def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper_params_dict, kflod_kwargs_hyper_params_dict,  queue_name='default'):
     template_task = Task.get_task(task_id=template_task_id)
 
     s = 0
