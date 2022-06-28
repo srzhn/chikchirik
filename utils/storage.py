@@ -1,11 +1,29 @@
 class ClearMLStorage():
     def __init__(self, project_name, task_name,
-                 dataset_id, dataset_file_name,
+                 dataset_id, dataset_file_name=None,
                  **kwargs) -> None:
         self._set_task_params(project_name, task_name,
                               kwargs.get('task_type', 'training'))
         self._set_dataset(dataset_id, dataset_file_name)
         self._load_params(**kwargs)
+        
+        # 2806 change
+        self._change_dataset_by_window_size(dataset_file_name)
+        
+        
+    def _change_dataset_by_window_size(self, dataset_file_name=None):
+        if dataset_file_name is not None:
+            return
+        if self.dataset_params['window_size']==60:
+            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws60.parquet"
+        elif self.dataset_params['window_size']==120:
+            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws120.parquet"
+        elif self.dataset_params['window_size']==360:
+            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws360.parquet"
+        return 
+
+
+
 
     def _set_task_params(self, project_name, task_name, task_type='training', **kwargs):
         self._project_name = project_name
@@ -26,7 +44,7 @@ class ClearMLStorage():
     def _load_params(self, **params):
         self.dataset_params = {
             "business_unit": "3990",
-            "analog_group": '150-40',
+            "analog_group": '150',
             "window_size": 60,
             "split_date": "01.01.2021",
             # "n_predict" : 1,
@@ -57,3 +75,21 @@ class ClearMLStorage():
             "shuffle": False
         }
         self.kflod_kwargs_params.update(params.get('kflod_kwargs_params',  {}))
+
+    def print_params(self):
+        print("Dataset:")
+        print(self.dataset)
+
+        print("Dataset Preprocessing Params:")
+        print(self.dataset_params)
+
+        print("Model type:")
+        print(self.model_type_params)
+
+        print('Model Parameters:')
+        print(self.model_kwargs_params)
+
+        print('K-Fold Parameters:')
+        print(self.kflod_kwargs_params)
+
+

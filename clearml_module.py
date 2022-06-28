@@ -59,15 +59,23 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     logger = task.get_logger()
     full_dict_to_save = {}
 
+    
+    print(task.get_parameters_as_dict())
+    storage.print_params()
+
     for n_predict in range(n_predict_max):
-        print(f"training : {n_predict}")
+        # print(f"training : {n_predict}")
+        print(dataset_df['window_size'].unique())
         X_train, X_test, y_train, y_test = split_train_test(
             dataset_df,
-            **storage.dataset_params,
+            # **storage.dataset_params,
+            **task.get_parameters_as_dict()['dataset_params'],
             n_predict=n_predict,
             drop_not_scalable=False
         )
-
+        if X_train.shape[0]==0:
+            print('empty train dataset!')
+            break
         # columns_to_drop = ['cut_date', 'material_cd',
         #                     'business_unit', 'window_size']
         # columns_to_drop += columns_for_deletion(dataset_df, startswith='predict')
@@ -79,12 +87,16 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
             model, dict_to_save = train_wo_cv(
                 storage, X_train, X_test, y_train, y_test)
         full_dict_to_save[n_predict] = dict_to_save
+    else:    
+        pickle.dump(
+            full_dict_to_save,
+            open("model_results.pkl", "wb")
+        )
 
-    pickle.dump(
-        full_dict_to_save,
-        open("model_results.pkl", "wb")
-    )
-    task.upload_artifact("model_results", artifact_object='model_results.pkl')
+        # print(task.get_parameters_as_dict())
+        # storage.print_params()
+
+        task.upload_artifact("model_results", artifact_object='model_results.pkl')
     return task
 
 
@@ -105,7 +117,7 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         *X_train['cut_date'].agg([min, max]).values.tolist()))
 
     for train_index, valid_index in cv_kfold.split(dates_range):
-        print("training kfold")
+        # print("training kfold")
         kfold_model_num += 1
 
         train_slice = X_train["cut_date"].isin(

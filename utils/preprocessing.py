@@ -92,10 +92,20 @@ def split_train_test(
     if scaling and scaling not in valid_scaling:
         raise ValueError("scaling_type must be one of %r." % valid_scaling)
 
-    tdf = data_df[(data_df['business_unit'] == business_unit) &
-                  (data_df['material_cd'] == analog_group) &
-                  (data_df['window_size'] == window_size)
-                  ]
+    # tdf = data_df[(data_df['business_unit'] == business_unit) &
+    #               (data_df['material_cd'] == analog_group) &
+    #               (data_df['window_size'] == window_size)
+    #               ]
+
+    print(f"Unique window_sizes: {data_df['window_size'].unique()}")
+
+    tdf = data_df[(data_df['business_unit'] == business_unit)]
+    print(tdf.shape[0])
+    tdf = tdf[tdf['material_cd'] == analog_group]
+    print(tdf.shape[0])
+    # tdf = tdf[tdf['window_size'] == window_size]
+    # print(tdf.shape[0])
+
 
     # split to train and test
     date_to_split = split_date - relativedelta(days=30) * (n_predict + 1)
@@ -115,7 +125,7 @@ def split_train_test(
         y_train = np.log1p(y_train)
         y_test = np.log1p(y_test)
 
-    if scaler_kwargs is None:
+    if scaler_kwargs is None or len(scaler_kwargs)==0:
         scaler_kwargs = {}
     # scaling, scaler = self.init_scaler(scaling, **scaler_kwargs)
     scaling, scaler = init_scaler_original(scaling, **scaler_kwargs)
@@ -135,6 +145,10 @@ def split_train_test(
     #     X_train = X_train.drop(['stock_bmu_count'], axis=1)
     #     X_test = X_test.drop(['stock_bmu_count'], axis=1)
     print(f"Train Shape : {train_slice.shape}, Test Shape {test_slice.shape}")
+
+    if X_train.shape[0]==0:
+        X_train, X_test, y_train, y_test
+
     # applying scaling
     if scaling:
         columns_list = X_train.columns
