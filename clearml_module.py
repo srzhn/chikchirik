@@ -257,7 +257,7 @@ def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper
 
         cloned_task = Task.clone(source_task=template_task)
         cloned_task.add_tags(
-            ["grid_search", model_name, f"bu={pair[0]}", f"group={pair[1]}"])
+            ['Clone', "grid_search", model_name, f"bu={pair[0]}", f"group={pair[1]}"])
 
         cloned_task.set_parameter(f"model_type/model_type", value=model_name)
         for key, value in dataset_param_grid.items():
