@@ -117,6 +117,11 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         *X_train['cut_date'].agg([min, max]).values.tolist()))
 
     for train_index, valid_index in cv_kfold.split(dates_range):
+        model = RegressionModel(
+                model_type=storage.model_type_params["model_type"],
+                model_kwargs=storage.model_kwargs_params
+            )
+
         # print("training kfold")
         kfold_model_num += 1
 
@@ -128,52 +133,54 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         X_kfold_train, y_kfold_train = X_train[train_slice], y_train[train_slice]
         X_kfold_valid, y_kfold_valid = X_train[valid_slice], y_train[valid_slice]
 
-        if y_train.nunique() > 1:
-            model = RegressionModel(
-                model_type=storage.model_type_params["model_type"],
-                model_kwargs=storage.model_kwargs_params
-            )
+        if y_train.nunique() <= 1:
+            print(f"[INFO]: y_train unique values = {y_train.nunique()}. Continue...")
+            continue
+            # model = RegressionModel(
+            #     model_type=storage.model_type_params["model_type"],
+            #     model_kwargs=storage.model_kwargs_params
+            # )
 
-            columns_to_drop = ['cut_date', 'material_cd',
-                               'business_unit', 'window_size']
-            columns_to_drop += columns_for_deletion(
-                X_train, startswith='predict')
-            columns_train_on = list(
-                set(X_train.columns) - set(columns_to_drop))
+        columns_to_drop = ['cut_date', 'material_cd',
+                            'business_unit', 'window_size']
+        columns_to_drop += columns_for_deletion(
+            X_train, startswith='predict')
+        columns_train_on = list(
+            set(X_train.columns) - set(columns_to_drop))
 
-            model.fit(
-                X_kfold_train[columns_train_on],
-                y_kfold_train,
-                eval_set=(X_kfold_valid[columns_train_on], y_kfold_valid)
-            )
+        model.fit(
+            X_kfold_train[columns_train_on],
+            y_kfold_train,
+            eval_set=(X_kfold_valid[columns_train_on], y_kfold_valid)
+        )
 
-            predict = model.predict(X_test[columns_train_on])
+        predict = model.predict(X_test[columns_train_on])
 
-            X_test_with_predict[f"model_predict_{kfold_model_num}"] = predict
+        X_test_with_predict[f"model_predict_{kfold_model_num}"] = predict
 
-            columns_train_on_dict[kfold_model_num] = columns_train_on
+        columns_train_on_dict[kfold_model_num] = columns_train_on
 
-            valid_predict = model.predict(X_kfold_valid[columns_train_on])
+        valid_predict = model.predict(X_kfold_valid[columns_train_on])
 
-            if storage.model_type_params["save_kfold_predicts"]:
-                X_kfold_with_predict.loc[valid_slice,
-                                         "model_predict"] = valid_predict
+        if storage.model_type_params["save_kfold_predicts"]:
+            X_kfold_with_predict.loc[valid_slice,
+                                        "model_predict"] = valid_predict
 
-            if storage.model_type_params["save_model"]:
-                kfold_model_dict[kfold_model_num] = kfold_model_dict
+        if storage.model_type_params["save_model"]:
+            kfold_model_dict[kfold_model_num] = kfold_model_dict
 
-            logger.report_scalar(
-                "kfold error",
-                "rmse",
-                iteration=kfold_model_num,
-                value=mean_squared_error(y_kfold_valid, valid_predict)
-            )
-            logger.report_scalar(
-                "kfold error",
-                "mae",
-                iteration=kfold_model_num,
-                value=mean_absolute_error(y_kfold_valid, valid_predict)
-            )
+        logger.report_scalar(
+            "kfold error",
+            "rmse",
+            iteration=kfold_model_num,
+            value=mean_squared_error(y_kfold_valid, valid_predict)
+        )
+        logger.report_scalar(
+            "kfold error",
+            "mae",
+            iteration=kfold_model_num,
+            value=mean_absolute_error(y_kfold_valid, valid_predict)
+        )
 
     dict_to_save = {
         "X_test_with_predict": X_test_with_predict,
