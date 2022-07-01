@@ -82,10 +82,10 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
 
         if storage.model_type_params["use_kfold"]:
             model, dict_to_save = train_with_cv(
-                storage, X_train, X_test, y_train, y_test, logger)
+                storage, X_train, X_test, y_train, y_test, logger, n_predict)
         else:
             model, dict_to_save = train_wo_cv(
-                storage, X_train, X_test, y_train, y_test)
+                storage, X_train, X_test, y_train, y_test, logger, n_predict)
         full_dict_to_save[n_predict] = dict_to_save
     else:    
         pickle.dump(
@@ -100,7 +100,7 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     return task
 
 
-def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger):
+def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
     cv_kfold = KFold(**storage.kflod_kwargs_params)
 
     kfold_model_num = 0
@@ -196,7 +196,7 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
     return model, dict_to_save
 
 
-def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test):
+def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
     model = RegressionModel(
         model_type=storage.model_type_params["model_type"],
         model_kwargs=storage.model_kwargs_params
@@ -220,6 +220,20 @@ def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test):
 
     if storage.model_type_params["save_model"]:
         dict_to_save["model"] = model
+
+    logger.report_scalar(
+        "kfold error",
+        "rmse",
+        iteration=n_predict,
+        value=mean_squared_error(y_test, predict)
+    )
+    logger.report_scalar(
+        "kfold error",
+        "mae",
+        iteration=n_predict,
+        value=mean_absolute_error(y_test, predict)
+    )
+    
     return model, dict_to_save
 
 
@@ -230,13 +244,16 @@ def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper
     param_grid = product(ParameterGrid(dataset_hyper_params_dict),
                          ParameterGrid(model_type_hyper_params_dict),
                          ParameterGrid(kflod_kwargs_hyper_params_dict))
-    for dataset_param_grid, model_type_param_grid, kfold_param_grid in param_grid:
+
+    total_len = len(list(param_grid))
+
+    for i, (dataset_param_grid, model_type_param_grid, kfold_param_grid) in enumerate(param_grid, 1):
         pair = (dataset_param_grid['business_unit'],
                 dataset_param_grid['analog_group'])
         window_size = dataset_param_grid['window_size']
         model_name = model_type_param_grid['model_type']
-        print("pair: {}, window_size: {}, model_name: {}".format(
-            *map(repr, (pair, window_size, model_name))))
+        print("pair {}/{}: {}, window_size: {}, model_name: {}".format(
+            *map(repr, (i, total_len, pair, window_size, model_name))))
 
         cloned_task = Task.clone(source_task=template_task)
         cloned_task.add_tags(

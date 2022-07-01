@@ -406,6 +406,22 @@ def split_train_test(
     return X_train, X_test, y_train, y_test
 #########################################
 
+import datetime
+from itertools import product
+import os
+import pickle
+
+import pandas as pd
+from sklearn.model_selection import KFold, ParameterGrid
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+import numpy as np
+
+# import clearml
+from clearml import Dataset, Task
+
+from utils.storage import ClearMLStorage
+from utils.model import RegressionModel
+from utils.preprocessing import columns_for_deletion, split_train_test
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -474,10 +490,10 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
 
         if storage.model_type_params["use_kfold"]:
             model, dict_to_save = train_with_cv(
-                storage, X_train, X_test, y_train, y_test, logger)
+                storage, X_train, X_test, y_train, y_test, logger, n_predict)
         else:
             model, dict_to_save = train_wo_cv(
-                storage, X_train, X_test, y_train, y_test)
+                storage, X_train, X_test, y_train, y_test, logger, n_predict)
         full_dict_to_save[n_predict] = dict_to_save
     else:    
         pickle.dump(
@@ -492,7 +508,7 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     return task
 
 
-def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger):
+def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
     cv_kfold = KFold(**storage.kflod_kwargs_params)
 
     kfold_model_num = 0
@@ -509,6 +525,11 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         *X_train['cut_date'].agg([min, max]).values.tolist()))
 
     for train_index, valid_index in cv_kfold.split(dates_range):
+        model = RegressionModel(
+                model_type=storage.model_type_params["model_type"],
+                model_kwargs=storage.model_kwargs_params
+            )
+
         # print("training kfold")
         kfold_model_num += 1
 
@@ -520,52 +541,54 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         X_kfold_train, y_kfold_train = X_train[train_slice], y_train[train_slice]
         X_kfold_valid, y_kfold_valid = X_train[valid_slice], y_train[valid_slice]
 
-        if y_train.nunique() > 1:
-            model = RegressionModel(
-                model_type=storage.model_type_params["model_type"],
-                model_kwargs=storage.model_kwargs_params
-            )
+        if y_train.nunique() <= 1:
+            print(f"[INFO]: y_train unique values = {y_train.nunique()}. Continue...")
+            continue
+            # model = RegressionModel(
+            #     model_type=storage.model_type_params["model_type"],
+            #     model_kwargs=storage.model_kwargs_params
+            # )
 
-            columns_to_drop = ['cut_date', 'material_cd',
-                               'business_unit', 'window_size']
-            columns_to_drop += columns_for_deletion(
-                X_train, startswith='predict')
-            columns_train_on = list(
-                set(X_train.columns) - set(columns_to_drop))
+        columns_to_drop = ['cut_date', 'material_cd',
+                            'business_unit', 'window_size']
+        columns_to_drop += columns_for_deletion(
+            X_train, startswith='predict')
+        columns_train_on = list(
+            set(X_train.columns) - set(columns_to_drop))
 
-            model.fit(
-                X_kfold_train[columns_train_on],
-                y_kfold_train,
-                eval_set=(X_kfold_valid[columns_train_on], y_kfold_valid)
-            )
+        model.fit(
+            X_kfold_train[columns_train_on],
+            y_kfold_train,
+            eval_set=(X_kfold_valid[columns_train_on], y_kfold_valid)
+        )
 
-            predict = model.predict(X_test[columns_train_on])
+        predict = model.predict(X_test[columns_train_on])
 
-            X_test_with_predict[f"model_predict_{kfold_model_num}"] = predict
+        X_test_with_predict[f"model_predict_{kfold_model_num}"] = predict
 
-            columns_train_on_dict[kfold_model_num] = columns_train_on
+        columns_train_on_dict[kfold_model_num] = columns_train_on
 
-            valid_predict = model.predict(X_kfold_valid[columns_train_on])
+        valid_predict = model.predict(X_kfold_valid[columns_train_on])
 
-            if storage.model_type_params["save_kfold_predicts"]:
-                X_kfold_with_predict.loc[valid_slice,
-                                         "model_predict"] = valid_predict
+        if storage.model_type_params["save_kfold_predicts"]:
+            X_kfold_with_predict.loc[valid_slice,
+                                        "model_predict"] = valid_predict
 
-            if storage.model_type_params["save_model"]:
-                kfold_model_dict[kfold_model_num] = kfold_model_dict
+        if storage.model_type_params["save_model"]:
+            kfold_model_dict[kfold_model_num] = kfold_model_dict
 
-            logger.report_scalar(
-                "kfold error",
-                "rmse",
-                iteration=kfold_model_num,
-                value=mean_squared_error(y_kfold_valid, valid_predict)
-            )
-            logger.report_scalar(
-                "kfold error",
-                "mae",
-                iteration=kfold_model_num,
-                value=mean_absolute_error(y_kfold_valid, valid_predict)
-            )
+        logger.report_scalar(
+            "kfold error",
+            "rmse",
+            iteration=kfold_model_num,
+            value=mean_squared_error(y_kfold_valid, valid_predict)
+        )
+        logger.report_scalar(
+            "kfold error",
+            "mae",
+            iteration=kfold_model_num,
+            value=mean_absolute_error(y_kfold_valid, valid_predict)
+        )
 
     dict_to_save = {
         "X_test_with_predict": X_test_with_predict,
@@ -581,7 +604,7 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
     return model, dict_to_save
 
 
-def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test):
+def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
     model = RegressionModel(
         model_type=storage.model_type_params["model_type"],
         model_kwargs=storage.model_kwargs_params
@@ -605,6 +628,20 @@ def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test):
 
     if storage.model_type_params["save_model"]:
         dict_to_save["model"] = model
+
+    logger.report_scalar(
+        "kfold error",
+        "rmse",
+        iteration=n_predict,
+        value=mean_squared_error(y_test, predict)
+    )
+    logger.report_scalar(
+        "kfold error",
+        "mae",
+        iteration=n_predict,
+        value=mean_absolute_error(y_test, predict)
+    )
+    
     return model, dict_to_save
 
 
@@ -615,13 +652,16 @@ def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper
     param_grid = product(ParameterGrid(dataset_hyper_params_dict),
                          ParameterGrid(model_type_hyper_params_dict),
                          ParameterGrid(kflod_kwargs_hyper_params_dict))
-    for dataset_param_grid, model_type_param_grid, kfold_param_grid in param_grid:
+
+    total_len = len(list(param_grid))
+
+    for i, (dataset_param_grid, model_type_param_grid, kfold_param_grid) in enumerate(param_grid, 1):
         pair = (dataset_param_grid['business_unit'],
                 dataset_param_grid['analog_group'])
         window_size = dataset_param_grid['window_size']
         model_name = model_type_param_grid['model_type']
-        print("pair: {}, window_size: {}, model_name: {}".format(
-            *map(repr, (pair, window_size, model_name))))
+        print("pair {}/{}: {}, window_size: {}, model_name: {}".format(
+            *map(repr, (i, total_len, pair, window_size, model_name))))
 
         cloned_task = Task.clone(source_task=template_task)
         cloned_task.add_tags(
@@ -640,6 +680,7 @@ def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper
 
         Task.enqueue(task=cloned_task, queue_name=queue_name)
 
+
 def main(project_name, task_name, dataset_id):
     storage = ClearMLStorage(project_name=project_name,
                             task_name=task_name,
@@ -653,6 +694,6 @@ def main(project_name, task_name, dataset_id):
 
 if __name__=="__main__":
     project_name = 'zra/0107'
-    task_name = 'train_template'
+    task_name = 'train_template_code_copied'
     dataset_id = 'f276f6c938c74252b1e87031782503d1'
     main(project_name, task_name, dataset_id)
