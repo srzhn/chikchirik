@@ -240,24 +240,27 @@ def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logge
 def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper_params_dict, kflod_kwargs_hyper_params_dict,  queue_name='default'):
     template_task = Task.get_task(task_id=template_task_id)
 
-    s = 0
-    param_grid = product(ParameterGrid(dataset_hyper_params_dict),
+    param_grid = list(product(ParameterGrid(dataset_hyper_params_dict),
                          ParameterGrid(model_type_hyper_params_dict),
-                         ParameterGrid(kflod_kwargs_hyper_params_dict))
+                         ParameterGrid(kflod_kwargs_hyper_params_dict)))
 
     total_len = len(list(param_grid))
+    print(f"Total amount of clones = {total_len}")
+    i = 0
 
-    for i, (dataset_param_grid, model_type_param_grid, kfold_param_grid) in enumerate(param_grid, 1):
+    for dataset_param_grid, model_type_param_grid, kfold_param_grid in param_grid:
+        i += 1
+        print(f"pair {i}/{total_len}: " , end='')
         pair = (dataset_param_grid['business_unit'],
                 dataset_param_grid['analog_group'])
         window_size = dataset_param_grid['window_size']
         model_name = model_type_param_grid['model_type']
-        print("pair {}/{}: {}, window_size: {}, model_name: {}".format(
-            *map(repr, (i, total_len, pair, window_size, model_name))))
+        print("{}, window_size: {}, model_name: {}".format(
+            *map(repr, (pair, window_size, model_name))))
 
         cloned_task = Task.clone(source_task=template_task)
         cloned_task.add_tags(
-            ['Clone', "grid_search", model_name, f"bu={pair[0]}", f"group={pair[1]}"])
+            ["grid_search", model_name, f"bu={pair[0]}", f"group={pair[1]}", "window_size={window_size}"])
 
         cloned_task.set_parameter(f"model_type/model_type", value=model_name)
         for key, value in dataset_param_grid.items():
