@@ -663,7 +663,8 @@ def main(project_name, task_name, dataset_id):
     task.close()
 
 if __name__=="__main__":
-    project_name = 'zra/0107'
-    task_name = 'train_template_code_copied'
-    dataset_id = 'f276f6c938c74252b1e87031782503d1'
+    project_name = 'zra/0407'
+    task_name = 'all'
+    # dataset_id = 'f276f6c938c74252b1e87031782503d1'
+    dataset_id = '5dc94de095014553acbe4f011a579241'
     main(project_name, task_name, dataset_id)

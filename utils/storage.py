@@ -64,7 +64,9 @@ class ClearMLStorage():
         self.model_type_params.update(params.get('model_type_params', {}))
 
         self.model_kwargs_params = {
-            "alpha": 1.0
+            "alpha": 1.0,
+            "max_depth": 20,
+            "n_estimators": 100
         }
         self.model_kwargs_params.update(params.get('model_kwargs_params', {}))
 
