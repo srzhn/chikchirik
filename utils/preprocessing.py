@@ -147,7 +147,7 @@ def split_train_test(
     print(f"Train Shape : {train_slice.shape}, Test Shape {test_slice.shape}")
 
     if X_train.shape[0]==0:
-        X_train, X_test, y_train, y_test
+        return X_train, X_test, y_train, y_test
 
     # applying scaling
     if scaling:

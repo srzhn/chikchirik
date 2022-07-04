@@ -28,16 +28,16 @@ class ClearMLStorage():
         # 2806 change
         self._change_dataset_by_window_size(dataset_file_name)
         
-    # TODO: Костыль, поэтому нужно процесс выбора датасета зашить куда-то. 
+    # FIXME: Костыль. Храним для каждого размера окна свой паркет, на данном этапе [60, 120, 360].
     def _change_dataset_by_window_size(self, dataset_file_name=None):
         if dataset_file_name is not None:
             return
         if self.dataset_params['window_size']==60:
-            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws60.parquet"
+            self.dataset['dataset_file_name'] = "dataset_ws60.parquet"
         elif self.dataset_params['window_size']==120:
-            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws120.parquet"
+            self.dataset['dataset_file_name'] = "dataset_ws120.parquet"
         elif self.dataset_params['window_size']==360:
-            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws360.parquet"
+            self.dataset['dataset_file_name'] = "dataset_ws360.parquet"
         return 
 
 
@@ -110,8 +110,12 @@ class ClearMLStorage():
         print('K-Fold Parameters:')
         print(self.kflod_kwargs_params)
 
+
+
+
 ############################################
 # from utils.model import RegressionModel
+
 import pandas as pd
 import numpy as np
 
@@ -228,6 +232,7 @@ class RegressionModel():
             return self.model.predict(X)
         else:
             raise Exception("Not Trained")
+
 
 #############################################
 # from utils.preprocessing import columns_for_deletion, split_train_test
@@ -380,7 +385,7 @@ def split_train_test(
     print(f"Train Shape : {train_slice.shape}, Test Shape {test_slice.shape}")
 
     if X_train.shape[0]==0:
-        X_train, X_test, y_train, y_test
+        return X_train, X_test, y_train, y_test
 
     # applying scaling
     if scaling:
@@ -404,8 +409,9 @@ def split_train_test(
                 X_test[col] = test_slice[col]
 
     return X_train, X_test, y_train, y_test
-#########################################
 
+#########################################
+# from clearml_module import make_task, load_dataset, clearml_task_iteration
 import datetime
 from itertools import product
 import os
@@ -468,12 +474,12 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     full_dict_to_save = {}
 
     
-    print(task.get_parameters_as_dict())
-    storage.print_params()
+    # print(task.get_parameters_as_dict())
+    # storage.print_params()
 
     for n_predict in range(n_predict_max):
         # print(f"training : {n_predict}")
-        print(dataset_df['window_size'].unique())
+        # print(dataset_df['window_size'].unique())
         X_train, X_test, y_train, y_test = split_train_test(
             dataset_df,
             # **storage.dataset_params,
@@ -643,42 +649,6 @@ def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logge
     )
     
     return model, dict_to_save
-
-
-def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper_params_dict, kflod_kwargs_hyper_params_dict,  queue_name='default'):
-    template_task = Task.get_task(task_id=template_task_id)
-
-    s = 0
-    param_grid = product(ParameterGrid(dataset_hyper_params_dict),
-                         ParameterGrid(model_type_hyper_params_dict),
-                         ParameterGrid(kflod_kwargs_hyper_params_dict))
-
-    total_len = len(list(param_grid))
-
-    for i, (dataset_param_grid, model_type_param_grid, kfold_param_grid) in enumerate(param_grid, 1):
-        pair = (dataset_param_grid['business_unit'],
-                dataset_param_grid['analog_group'])
-        window_size = dataset_param_grid['window_size']
-        model_name = model_type_param_grid['model_type']
-        print("pair {}/{}: {}, window_size: {}, model_name: {}".format(
-            *map(repr, (i, total_len, pair, window_size, model_name))))
-
-        cloned_task = Task.clone(source_task=template_task)
-        cloned_task.add_tags(
-            ["grid_search", model_name, f"bu={pair[0]}", f"group={pair[1]}"])
-
-        cloned_task.set_parameter(f"model_type/model_type", value=model_name)
-        for key, value in dataset_param_grid.items():
-            cloned_task.set_parameter(f"dataset_params/{key}", value=value)
-
-        for key, value in model_type_param_grid.items():
-            cloned_task.set_parameter(f"model_type_params/{key}", value=value)
-
-        for key, value in kfold_param_grid.items():
-            cloned_task.set_parameter(
-                f"kflod_kwargs_params/{key}", value=value)
-
-        Task.enqueue(task=cloned_task, queue_name=queue_name)
 
 
 def main(project_name, task_name, dataset_id):

@@ -11,19 +11,17 @@ class ClearMLStorage():
         self._change_dataset_by_window_size(dataset_file_name)
         
         
+    # FIXME: Костыль. Храним для каждого размера окна свой паркет, на данном этапе [60, 120, 360].
     def _change_dataset_by_window_size(self, dataset_file_name=None):
         if dataset_file_name is not None:
             return
         if self.dataset_params['window_size']==60:
-            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws60.parquet"
+            self.dataset['dataset_file_name'] = "dataset_ws60.parquet"
         elif self.dataset_params['window_size']==120:
-            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws120.parquet"
+            self.dataset['dataset_file_name'] = "dataset_ws120.parquet"
         elif self.dataset_params['window_size']==360:
-            self.dataset['dataset_file_name'] = "full_dataset_all_features_2806_ws360.parquet"
+            self.dataset['dataset_file_name'] = "dataset_ws360.parquet"
         return 
-
-
-
 
     def _set_task_params(self, project_name, task_name, task_type='training', **kwargs):
         self._project_name = project_name
