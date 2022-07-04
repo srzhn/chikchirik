@@ -465,7 +465,6 @@ def load_dataset(storage: ClearMLStorage):
 
 # def clearml_task_iteration(task: Task, n_predict_max=12):
 
-
 def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     task = make_task(storage)
     dataset_df = load_dataset(storage)
@@ -474,16 +473,21 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     full_dict_to_save = {}
 
     
-    # print(task.get_parameters_as_dict())
-    # storage.print_params()
+    print(task.get_parameters_as_dict())
+    storage.print_params()
+
+    task_params = task.get_parameters_as_dict()
+    print(task_params)
 
     for n_predict in range(n_predict_max):
         # print(f"training : {n_predict}")
-        # print(dataset_df['window_size'].unique())
+        print(dataset_df['window_size'].unique())
+
         X_train, X_test, y_train, y_test = split_train_test(
             dataset_df,
             # **storage.dataset_params,
-            **task.get_parameters_as_dict()['dataset_params'],
+            # **task.get_parameters_as_dict()['dataset_params'],
+            **task_params['dataset_params'],
             n_predict=n_predict,
             drop_not_scalable=False
         )
@@ -496,10 +500,12 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
 
         if storage.model_type_params["use_kfold"]:
             model, dict_to_save = train_with_cv(
-                storage, X_train, X_test, y_train, y_test, logger, n_predict)
+                # storage, X_train, X_test, y_train, y_test, logger, n_predict)
+                task_params, X_train, X_test, y_train, y_test, logger, n_predict)
         else:
             model, dict_to_save = train_wo_cv(
-                storage, X_train, X_test, y_train, y_test, logger, n_predict)
+                # storage, X_train, X_test, y_train, y_test, logger, n_predict)
+                task_params, X_train, X_test, y_train, y_test, logger, n_predict)
         full_dict_to_save[n_predict] = dict_to_save
     else:    
         pickle.dump(
@@ -507,22 +513,32 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
             open("model_results.pkl", "wb")
         )
 
+        pickle.dump(
+            model,
+            open("model.pkl", "wb")
+        )
+
         # print(task.get_parameters_as_dict())
         # storage.print_params()
 
         task.upload_artifact("model_results", artifact_object='model_results.pkl')
+        task.upload_artifact("model", artifact_object='model.pkl')
     return task
 
 
-def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
-    cv_kfold = KFold(**storage.kflod_kwargs_params)
+# def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
+def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
+    # cv_kfold = KFold(**storage.kflod_kwargs_params)
+    # cv_kfold = KFold(**task_params['kflod_kwargs_params'])
+    cv_kfold = KFold(n_splits=int(task_params['kflod_kwargs_params']['n_splits']))
 
     kfold_model_num = 0
     kfold_model_dict = {}
 
     columns_train_on_dict = {}
 
-    if storage.model_type_params["save_kfold_predicts"]:
+    # if storage.model_type_params["save_kfold_predicts"]:
+    if task_params['model_type_params']["save_kfold_predicts"]:
         X_kfold_with_predict = X_train.copy()
 
     X_test_with_predict = X_test.copy()
@@ -531,9 +547,22 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         *X_train['cut_date'].agg([min, max]).values.tolist()))
 
     for train_index, valid_index in cv_kfold.split(dates_range):
+        model_type = task_params['model_type_params']["model_type"]
+        model_kwargs = task_params['model_kwargs_params']
+        model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+
+        print(f"[INFO] model_type: {model_type}")
+        print(f"[INFO] model_kwargs: {model_kwargs}")
         model = RegressionModel(
-                model_type=storage.model_type_params["model_type"],
-                model_kwargs=storage.model_kwargs_params
+                # model_type=storage.model_type_params["model_type"],
+                # model_kwargs=storage.model_kwargs_params
+                
+                # model_type=task_params['model_type_params']["model_type"],
+                # model_kwargs=task_params['model_kwargs_params']
+
+                model_type=model_type,
+                model_kwargs=model_kwargs
+
             )
 
         # print("training kfold")
@@ -576,11 +605,13 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
 
         valid_predict = model.predict(X_kfold_valid[columns_train_on])
 
-        if storage.model_type_params["save_kfold_predicts"]:
+        # if storage.model_type_params["save_kfold_predicts"]:
+        save_kfold_predicts = task_params['model_type_params']["save_kfold_predicts"]
+        if str(save_kfold_predicts)=='True':
             X_kfold_with_predict.loc[valid_slice,
                                         "model_predict"] = valid_predict
 
-        if storage.model_type_params["save_model"]:
+        if task_params['model_type_params']["save_model"]:
             kfold_model_dict[kfold_model_num] = kfold_model_dict
 
         logger.report_scalar(
@@ -601,20 +632,34 @@ def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, log
         "columns_train_on_dict": columns_train_on_dict,
     }
 
-    if storage.model_type_params["save_model"]:
+    if task_params['model_type_params']["save_model"]:
         dict_to_save["kfold_model_dict"] = kfold_model_dict
 
-    if storage.model_type_params["save_kfold_predicts"]:
+    if task_params['model_type_params']["save_kfold_predicts"]:
         dict_to_save["X_kfold_with_predict"] = X_kfold_with_predict
 
     return model, dict_to_save
 
 
-def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
+# def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
+def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
+    model_type = task_params['model_type_params']["model_type"]
+    model_kwargs = task_params['model_kwargs_params']
+    model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+
+    print(f"[INFO] model_type: {model_type}")
+    print(f"[INFO] model_kwargs: {model_kwargs}")
     model = RegressionModel(
-        model_type=storage.model_type_params["model_type"],
-        model_kwargs=storage.model_kwargs_params
-    )
+            # model_type=storage.model_type_params["model_type"],
+            # model_kwargs=storage.model_kwargs_params
+            
+            # model_type=task_params['model_type_params']["model_type"],
+            # model_kwargs=task_params['model_kwargs_params']
+
+            model_type=model_type,
+            model_kwargs=model_kwargs
+
+        )
 
     columns_to_drop = ['cut_date', 'material_cd',
                        'business_unit', 'window_size']
@@ -632,17 +677,17 @@ def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logge
         "X_test_with_predict": X_test_with_predict
     }
 
-    if storage.model_type_params["save_model"]:
+    if str(task_params['model_type_params']["save_model"])=='True':
         dict_to_save["model"] = model
 
     logger.report_scalar(
-        "kfold error",
+        "month",
         "rmse",
         iteration=n_predict,
         value=mean_squared_error(y_test, predict)
     )
     logger.report_scalar(
-        "kfold error",
+        "month",
         "mae",
         iteration=n_predict,
         value=mean_absolute_error(y_test, predict)
@@ -666,5 +711,5 @@ if __name__=="__main__":
     project_name = 'zra/0407'
     task_name = 'all'
     # dataset_id = 'f276f6c938c74252b1e87031782503d1'
-    dataset_id = '5dc94de095014553acbe4f011a579241'
+    dataset_id = '5dc94de095014553acbe4f011a579241' # 0407
     main(project_name, task_name, dataset_id)
