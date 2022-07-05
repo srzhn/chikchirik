@@ -115,6 +115,15 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     return task
 
 
+def to_numeric(x):
+    if not isinstance(x, str):
+        return x
+    try:
+        y = eval(x)
+        return y
+    except:
+        return x
+
 # def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
 def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
     # cv_kfold = KFold(**storage.kflod_kwargs_params)
@@ -138,7 +147,13 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
     for train_index, valid_index in cv_kfold.split(dates_range):
         model_type = task_params['model_type_params']["model_type"]
         model_kwargs = task_params['model_kwargs_params']
-        model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+        # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+        model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
+
+        print('clearml_module')
+        print(model_kwargs)
+        model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
+        print(model_kwargs)
 
         print(f"[INFO] model_type: {model_type}")
         print(f"[INFO] model_kwargs: {model_kwargs}")
@@ -234,7 +249,14 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
 def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
     model_type = task_params['model_type_params']["model_type"]
     model_kwargs = task_params['model_kwargs_params']
-    model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+    # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+
+    model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
+    
+    print('clearml_module')
+    print(model_kwargs)
+    model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
+    print(model_kwargs)
 
     print(f"[INFO] model_type: {model_type}")
     print(f"[INFO] model_kwargs: {model_kwargs}")

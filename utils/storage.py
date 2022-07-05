@@ -56,7 +56,8 @@ class ClearMLStorage():
             params.get('dataset_params', {}))
 
         self.model_type_params = {
-            "model_type": "Ridge",
+            # "model_type": "Ridge",
+            "model_type": "CatBoostRegressor",
             "use_kfold": True,
             "save_kfold_predicts": True,
             "save_model": False,
@@ -65,8 +66,13 @@ class ClearMLStorage():
 
         self.model_kwargs_params = {
             "alpha": 1.0,
-            "max_depth": 20,
-            "n_estimators": 100
+
+            "max_depth": 5,
+            "n_estimators": 100,
+
+            # "depth": 5,
+            # "iterations": 200,
+            "l2_leaf_reg": 0.01
         }
         self.model_kwargs_params.update(params.get('model_kwargs_params', {}))
 

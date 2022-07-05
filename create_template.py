@@ -28,6 +28,7 @@ class ClearMLStorage():
         # 2806 change
         self._change_dataset_by_window_size(dataset_file_name)
         
+        
     # FIXME: Костыль. Храним для каждого размера окна свой паркет, на данном этапе [60, 120, 360].
     def _change_dataset_by_window_size(self, dataset_file_name=None):
         if dataset_file_name is not None:
@@ -39,9 +40,6 @@ class ClearMLStorage():
         elif self.dataset_params['window_size']==360:
             self.dataset['dataset_file_name'] = "dataset_ws360.parquet"
         return 
-
-
-
 
     def _set_task_params(self, project_name, task_name, task_type='training', **kwargs):
         self._project_name = project_name
@@ -76,7 +74,8 @@ class ClearMLStorage():
             params.get('dataset_params', {}))
 
         self.model_type_params = {
-            "model_type": "Ridge",
+            # "model_type": "Ridge",
+            "model_type": "CatBoostRegressor",
             "use_kfold": True,
             "save_kfold_predicts": True,
             "save_model": False,
@@ -84,7 +83,14 @@ class ClearMLStorage():
         self.model_type_params.update(params.get('model_type_params', {}))
 
         self.model_kwargs_params = {
-            "alpha": 1.0
+            "alpha": 1.0,
+            
+            "max_depth": 20,
+            "n_estimators": 100,
+
+            "depth": 5,
+            "iterations": 200,
+            "l2_leaf_reg": 0.01
         }
         self.model_kwargs_params.update(params.get('model_kwargs_params', {}))
 
@@ -109,6 +115,8 @@ class ClearMLStorage():
 
         print('K-Fold Parameters:')
         print(self.kflod_kwargs_params)
+
+
 
 
 
@@ -525,6 +533,14 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
         task.upload_artifact("model", artifact_object='model.pkl')
     return task
 
+def to_numeric(x):
+    if not isinstance(x, str):
+        return x
+    try:
+        y = eval(x)
+        return y
+    except:
+        return x
 
 # def train_with_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
 def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
@@ -549,7 +565,12 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
     for train_index, valid_index in cv_kfold.split(dates_range):
         model_type = task_params['model_type_params']["model_type"]
         model_kwargs = task_params['model_kwargs_params']
-        model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+        # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+
+        print('create_template')
+        print(model_kwargs)
+        model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
+        print(model_kwargs)
 
         print(f"[INFO] model_type: {model_type}")
         print(f"[INFO] model_kwargs: {model_kwargs}")
@@ -645,7 +666,12 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
 def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
     model_type = task_params['model_type_params']["model_type"]
     model_kwargs = task_params['model_kwargs_params']
-    model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+    # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
+
+    print('create_template')
+    print(model_kwargs)
+    model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
+    print(model_kwargs)
 
     print(f"[INFO] model_type: {model_type}")
     print(f"[INFO] model_kwargs: {model_kwargs}")
@@ -708,7 +734,8 @@ def main(project_name, task_name, dataset_id):
     task.close()
 
 if __name__=="__main__":
-    project_name = 'zra/0407'
+    # project_name = 'zra/0407'
+    project_name = 'zra/0507'
     task_name = 'all'
     # dataset_id = 'f276f6c938c74252b1e87031782503d1'
     dataset_id = '5dc94de095014553acbe4f011a579241' # 0407
