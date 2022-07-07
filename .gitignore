@@ -3,10 +3,12 @@ config.json
 *.pkl
 *.pickle
 *.parquet
-analysis.ipynb
+analysis*.ipynb
 sandbox.ipynb
 catboost_info/
 *.txt
+clearml.conf
+*.xlsx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
