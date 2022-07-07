@@ -2,6 +2,11 @@ config.env
 config.json
 *.pkl
 *.pickle
+*.parquet
+analysis.ipynb
+sandbox.ipynb
+catboost_info/
+*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

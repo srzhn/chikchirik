@@ -2,6 +2,7 @@ import datetime
 from itertools import product
 import os
 import pickle
+from tabnanny import verbose
 
 import pandas as pd
 from sklearn.model_selection import KFold, ParameterGrid
@@ -203,7 +204,8 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
         model.fit(
             X_kfold_train[columns_train_on],
             y_kfold_train,
-            eval_set=(X_kfold_valid[columns_train_on], y_kfold_valid)
+            eval_set=(X_kfold_valid[columns_train_on], y_kfold_valid),
+            verbose=False
         )
 
         predict = model.predict(X_test[columns_train_on])
@@ -282,7 +284,7 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
     columns_to_drop += columns_for_deletion(X_train, startswith='predict')
     columns_train_on = list(set(X_train.columns) - set(columns_to_drop))
 
-    model.fit(X_train[columns_train_on], y_train)
+    model.fit(X_train[columns_train_on], y_train, verbose=False)
 
     predict = model.predict(X_test[columns_train_on])
     X_test_with_predict = X_test.copy()
