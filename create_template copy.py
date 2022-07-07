@@ -13,7 +13,7 @@ def main(project_name, task_name, dataset_id):
     task.close()
 
 if __name__=="__main__":
-    project_name = 'zra/0507'
+    project_name = 'zra/test'
     task_name = 'all'
     dataset_id = '5dc94de095014553acbe4f011a579241'
     main(project_name, task_name, dataset_id)

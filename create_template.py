@@ -76,7 +76,7 @@ class ClearMLStorage():
         self.model_type_params = {
             # "model_type": "Ridge",
             "model_type": "CatBoostRegressor",
-            "use_kfold": True,
+            "use_kfold": False,
             "save_kfold_predicts": True,
             "save_model": False,
         }
@@ -367,7 +367,7 @@ def split_train_test(
     y_train = train_slice[target_column_name]
     y_test = test_slice[target_column_name]
 
-    if log_target:
+    if str(log_target)=='True':
         y_train = np.log1p(y_train)
         y_test = np.log1p(y_test)
 
@@ -639,7 +639,7 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
             "kfold error",
             "rmse",
             iteration=kfold_model_num,
-            value=mean_squared_error(y_kfold_valid, valid_predict)
+            value=mean_squared_error(y_kfold_valid, valid_predict, squared=False)
         )
         logger.report_scalar(
             "kfold error",
@@ -710,7 +710,7 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
         "month",
         "rmse",
         iteration=n_predict,
-        value=mean_squared_error(y_test, predict)
+        value=mean_squared_error(y_test, predict, squared=False)
     )
     logger.report_scalar(
         "month",
@@ -735,7 +735,8 @@ def main(project_name, task_name, dataset_id):
 
 if __name__=="__main__":
     # project_name = 'zra/0407'
-    project_name = 'zra/0507'
+    # project_name = 'zra/0507'
+    project_name = 'zra/test'
     task_name = 'all'
     # dataset_id = 'f276f6c938c74252b1e87031782503d1'
     dataset_id = '5dc94de095014553acbe4f011a579241' # 0407

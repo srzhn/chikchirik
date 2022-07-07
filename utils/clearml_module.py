@@ -227,7 +227,7 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
             "kfold error",
             "rmse",
             iteration=kfold_model_num,
-            value=mean_squared_error(y_kfold_valid, valid_predict)
+            value=mean_squared_error(y_kfold_valid, valid_predict, squared=False)
         )
         logger.report_scalar(
             "kfold error",
@@ -300,7 +300,7 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
         "month",
         "rmse",
         iteration=n_predict,
-        value=mean_squared_error(y_test, predict)
+        value=mean_squared_error(y_test, predict, squared=False)
     )
     logger.report_scalar(
         "month",

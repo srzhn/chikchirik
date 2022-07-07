@@ -121,7 +121,7 @@ def split_train_test(
     y_train = train_slice[target_column_name]
     y_test = test_slice[target_column_name]
 
-    if log_target:
+    if str(log_target)==True:
         y_train = np.log1p(y_train)
         y_test = np.log1p(y_test)
 
