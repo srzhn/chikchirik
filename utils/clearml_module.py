@@ -60,6 +60,13 @@ def load_dataset(storage: ClearMLStorage):
 
 def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     task = make_task(storage)
+
+    # FIXME: Костыль.
+    get_ws = int(task.get_parameters()["dataset_params/window_size"])
+    task.set_parameter(
+                "dataset/dataset_file_name", value=f"dataset_ws{get_ws}.parquet")
+    
+
     dataset_df = load_dataset(storage)
 
     logger = task.get_logger()
@@ -242,8 +249,8 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
         "X_test_with_predict": X_test_with_predict,
         "columns_train_on_dict": columns_train_on_dict,
     }
-
-    if task_params['model_type_params']["save_model"]:
+    # TODO: сохранение всех моделей, а не только последней, если их необходимо сохранять
+    if str(task_params['model_type_params']['save_model'])=='True':
         dict_to_save["kfold_model_dict"] = kfold_model_dict
 
     if task_params['model_type_params']["save_kfold_predicts"]:

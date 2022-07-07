@@ -441,6 +441,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+
 def make_task(storage: ClearMLStorage):
     
     Task.add_requirements("pyarrow")
@@ -473,8 +474,16 @@ def load_dataset(storage: ClearMLStorage):
 
 # def clearml_task_iteration(task: Task, n_predict_max=12):
 
+
 def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
     task = make_task(storage)
+
+    # FIXME: Костыль.
+    get_ws = int(task.get_parameters()["dataset_params/window_size"])
+    task.set_parameter(
+                "dataset/dataset_file_name", value=f"dataset_ws{get_ws}.parquet")
+    
+
     dataset_df = load_dataset(storage)
 
     logger = task.get_logger()
@@ -530,8 +539,11 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
         # storage.print_params()
 
         task.upload_artifact("model_results", artifact_object='model_results.pkl')
-        task.upload_artifact("model", artifact_object='model.pkl')
+        # TODO: сохранение всех моделей, а не только последней, если их необходимо сохранять
+        if str(task_params['model_type_params']['save_model'])=='True':
+            task.upload_artifact("model", artifact_object='model.pkl')
     return task
+
 
 def to_numeric(x):
     if not isinstance(x, str):
@@ -566,9 +578,9 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
         model_type = task_params['model_type_params']["model_type"]
         model_kwargs = task_params['model_kwargs_params']
         # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
-
+        
         print('create_template')
-        print(model_kwargs)
+        # print(model_kwargs)
         model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
         print(model_kwargs)
 
@@ -668,9 +680,9 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
     model_type = task_params['model_type_params']["model_type"]
     model_kwargs = task_params['model_kwargs_params']
     # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
-
+    
     print('create_template')
-    print(model_kwargs)
+    # print(model_kwargs)
     model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
     print(model_kwargs)
 
@@ -721,7 +733,6 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
     )
     
     return model, dict_to_save
-
 
 def main(project_name, task_name, dataset_id):
     storage = ClearMLStorage(project_name=project_name,
