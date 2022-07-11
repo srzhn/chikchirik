@@ -61,6 +61,7 @@ class ClearMLStorage():
         self.dataset_params = {
             "business_unit": "3990",
             "analog_group": '150',
+            # "analog_group": '150-40', # 0707
             "window_size": 60,
             "split_date": "01.01.2021",
             # "n_predict" : 1,
@@ -85,11 +86,11 @@ class ClearMLStorage():
         self.model_kwargs_params = {
             "alpha": 1.0,
             
-            "max_depth": 20,
-            "n_estimators": 100,
+            "max_depth": 5,
+            "n_estimators": 500,
 
-            "depth": 5,
-            "iterations": 200,
+            # "depth": 5,
+            # "iterations": 200,
             "l2_leaf_reg": 0.01
         }
         self.model_kwargs_params.update(params.get('model_kwargs_params', {}))
@@ -433,9 +434,9 @@ import numpy as np
 # import clearml
 from clearml import Dataset, Task
 
-from utils.storage import ClearMLStorage
-from utils.model import RegressionModel
-from utils.preprocessing import columns_for_deletion, split_train_test
+# from utils.storage import ClearMLStorage
+# from utils.model import RegressionModel
+# from utils.preprocessing import columns_for_deletion, split_train_test
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -472,6 +473,21 @@ def load_dataset(storage: ClearMLStorage):
         dataset_file_path, dataset_file_name))
     return dataset_df
 
+def load_dataset(task):
+    """Выглядит трудозатратным, весь датасет сейчас занимает Гб ОЗУ. 
+    Мб разделить на отдельные датасеты и мерджить при необходимости?
+    """
+
+    dataset_id = task.get_parameters()['dataset/dataset_id']
+    dataset_file_name = task.get_parameters()['dataset/dataset_file_name']
+
+    dataset = Dataset.get(dataset_id=dataset_id)
+    dataset_file_path = dataset.get_local_copy()
+
+    dataset_df = pd.read_parquet(os.path.join(
+        dataset_file_path, dataset_file_name))
+    return dataset_df
+
 # def clearml_task_iteration(task: Task, n_predict_max=12):
 
 
@@ -484,7 +500,8 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
                 "dataset/dataset_file_name", value=f"dataset_ws{get_ws}.parquet")
     
 
-    dataset_df = load_dataset(storage)
+    # dataset_df = load_dataset(storage)
+    dataset_df = load_dataset(task)
 
     logger = task.get_logger()
     full_dict_to_save = {}
@@ -748,8 +765,15 @@ def main(project_name, task_name, dataset_id):
 if __name__=="__main__":
     # project_name = 'zra/0407'
     # project_name = 'zra/0507'
-    project_name = 'zra/test'
+    # project_name = 'zra/test'
+    # project_name = 'zra/0707_pn40'
+    # project_name = 'zra/0907_pn40'
+    project_name = 'zra/0907'
+    
     task_name = 'all'
+
     # dataset_id = 'f276f6c938c74252b1e87031782503d1'
     dataset_id = '5dc94de095014553acbe4f011a579241' # 0407
+    # dataset_id = 'df4fbdd4517249c4ade0af6a68df1638' # 0707_pn40
+    # dataset_id = 'aeca5e6b7d4740edb10ef96214b25162' # 0907_pn40
     main(project_name, task_name, dataset_id)
