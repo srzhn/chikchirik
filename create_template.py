@@ -60,8 +60,8 @@ class ClearMLStorage():
     def _load_params(self, **params):
         self.dataset_params = {
             "business_unit": "3990",
-            "analog_group": '150',
-            # "analog_group": '150-40', # 0707
+            # "analog_group": '150',
+            "analog_group": '150-40', # 0707
             "window_size": 60,
             "split_date": "01.01.2021",
             # "n_predict" : 1,
@@ -505,6 +505,7 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
 
     logger = task.get_logger()
     full_dict_to_save = {}
+    models_dict_to_save = {}
 
     
     print(task.get_parameters_as_dict())
@@ -541,24 +542,26 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
                 # storage, X_train, X_test, y_train, y_test, logger, n_predict)
                 task_params, X_train, X_test, y_train, y_test, logger, n_predict)
         full_dict_to_save[n_predict] = dict_to_save
+        models_dict_to_save[n_predict] = model
+
     else:    
         pickle.dump(
             full_dict_to_save,
-            open("model_results.pkl", "wb")
+            open("results.pkl", "wb")
         )
 
         pickle.dump(
-            model,
-            open("model.pkl", "wb")
+            models_dict_to_save,
+            open("models.pkl", "wb")
         )
 
         # print(task.get_parameters_as_dict())
         # storage.print_params()
 
-        task.upload_artifact("model_results", artifact_object='model_results.pkl')
+        task.upload_artifact("results", artifact_object='results.pkl')
         # TODO: сохранение всех моделей, а не только последней, если их необходимо сохранять
         if str(task_params['model_type_params']['save_model'])=='True':
-            task.upload_artifact("model", artifact_object='model.pkl')
+            task.upload_artifact("models", artifact_object='models.pkl')
     return task
 
 
@@ -662,7 +665,7 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
             X_kfold_with_predict.loc[valid_slice,
                                         "model_predict"] = valid_predict
 
-        if task_params['model_type_params']["save_model"]:
+        if str(task_params['model_type_params']["save_model"])=='True':
             kfold_model_dict[kfold_model_num] = kfold_model_dict
 
         logger.report_scalar(
@@ -683,10 +686,10 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
         "columns_train_on_dict": columns_train_on_dict,
     }
 
-    if task_params['model_type_params']["save_model"]:
+    if str(task_params['model_type_params']["save_model"])=='True':
         dict_to_save["kfold_model_dict"] = kfold_model_dict
 
-    if task_params['model_type_params']["save_kfold_predicts"]:
+    if str(task_params['model_type_params']["save_kfold_predicts"])=='True':
         dict_to_save["X_kfold_with_predict"] = X_kfold_with_predict
 
     return model, dict_to_save
@@ -768,12 +771,14 @@ if __name__=="__main__":
     # project_name = 'zra/test'
     # project_name = 'zra/0707_pn40'
     # project_name = 'zra/0907_pn40'
-    project_name = 'zra/0907'
+    # project_name = 'zra/0907'
+    # project_name = 'zra/1207_feature_importance'
+    project_name = 'zra/1207_feature_importance_pn40'
     
     task_name = 'all'
 
     # dataset_id = 'f276f6c938c74252b1e87031782503d1'
-    dataset_id = '5dc94de095014553acbe4f011a579241' # 0407
+    # dataset_id = '5dc94de095014553acbe4f011a579241' # 0407
     # dataset_id = 'df4fbdd4517249c4ade0af6a68df1638' # 0707_pn40
-    # dataset_id = 'aeca5e6b7d4740edb10ef96214b25162' # 0907_pn40
+    dataset_id = 'aeca5e6b7d4740edb10ef96214b25162' # 0907_pn40
     main(project_name, task_name, dataset_id)
