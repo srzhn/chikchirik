@@ -4,6 +4,7 @@ config.json
 *.pickle
 *.parquet
 analysis*.ipynb
+analysis/
 sandbox.ipynb
 catboost_info/
 *.txt
