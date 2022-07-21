@@ -2,12 +2,11 @@ import datetime
 from itertools import product
 import os
 import pickle
-from tabnanny import verbose
 
 import pandas as pd
 from sklearn.model_selection import KFold, ParameterGrid
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-# import numpy as np
+import numpy as np
 
 # import clearml
 from clearml import Dataset, Task
@@ -19,7 +18,6 @@ from clearml import Dataset, Task
 from .storage import ClearMLStorage
 from .model import RegressionModel
 from .preprocessing import columns_for_deletion, split_train_test
-
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -40,13 +38,28 @@ def make_task(storage: ClearMLStorage):
     return task
 
 
-def load_dataset(storage: ClearMLStorage):
+# def load_dataset(storage: ClearMLStorage):
+#     """Выглядит трудозатратным, весь датасет сейчас занимает Гб ОЗУ. 
+#     Мб разделить на отдельные датасеты и мерджить при необходимости?
+#     """
+
+#     dataset_id = storage.dataset["dataset_id"]
+#     dataset_file_name = storage.dataset["dataset_file_name"]
+
+#     dataset = Dataset.get(dataset_id=dataset_id)
+#     dataset_file_path = dataset.get_local_copy()
+
+#     dataset_df = pd.read_parquet(os.path.join(
+#         dataset_file_path, dataset_file_name))
+#     return dataset_df
+
+def load_dataset(task):
     """Выглядит трудозатратным, весь датасет сейчас занимает Гб ОЗУ. 
     Мб разделить на отдельные датасеты и мерджить при необходимости?
     """
 
-    dataset_id = storage.dataset["dataset_id"]
-    dataset_file_name = storage.dataset["dataset_file_name"]
+    dataset_id = task.get_parameters()['dataset/dataset_id']
+    dataset_file_name = task.get_parameters()['dataset/dataset_file_name']
 
     dataset = Dataset.get(dataset_id=dataset_id)
     dataset_file_path = dataset.get_local_copy()
@@ -67,10 +80,12 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
                 "dataset/dataset_file_name", value=f"dataset_ws{get_ws}.parquet")
     
 
-    dataset_df = load_dataset(storage)
+    # dataset_df = load_dataset(storage)
+    dataset_df = load_dataset(task)
 
     logger = task.get_logger()
     full_dict_to_save = {}
+    models_dict_to_save = {}
 
     
     print(task.get_parameters_as_dict())
@@ -107,24 +122,26 @@ def clearml_task_iteration(storage: ClearMLStorage, n_predict_max=12):
                 # storage, X_train, X_test, y_train, y_test, logger, n_predict)
                 task_params, X_train, X_test, y_train, y_test, logger, n_predict)
         full_dict_to_save[n_predict] = dict_to_save
+        models_dict_to_save[n_predict] = model
+
     else:    
         pickle.dump(
             full_dict_to_save,
-            open("model_results.pkl", "wb")
+            open("results.pkl", "wb")
         )
 
         pickle.dump(
-            model,
-            open("model.pkl", "wb")
+            models_dict_to_save,
+            open("models.pkl", "wb")
         )
 
         # print(task.get_parameters_as_dict())
         # storage.print_params()
 
-        task.upload_artifact("model_results", artifact_object='model_results.pkl')
+        task.upload_artifact("results", artifact_object='results.pkl')
         # TODO: сохранение всех моделей, а не только последней, если их необходимо сохранять
-        if task_params['model_type_params']['save_model']:
-            task.upload_artifact("model", artifact_object='model.pkl')
+        if str(task_params['model_type_params']['save_model'])=='True':
+            task.upload_artifact("models", artifact_object='models.pkl')
     return task
 
 
@@ -161,10 +178,9 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
         model_type = task_params['model_type_params']["model_type"]
         model_kwargs = task_params['model_kwargs_params']
         # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
-        model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
-
-        print('clearml_module')
-        print(model_kwargs)
+        
+        # print('clearml_module')
+        # print(model_kwargs)
         model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
         print(model_kwargs)
 
@@ -229,7 +245,7 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
             X_kfold_with_predict.loc[valid_slice,
                                         "model_predict"] = valid_predict
 
-        if task_params['model_type_params']["save_model"]:
+        if str(task_params['model_type_params']["save_model"])=='True':
             kfold_model_dict[kfold_model_num] = kfold_model_dict
 
         logger.report_scalar(
@@ -249,11 +265,12 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
         "X_test_with_predict": X_test_with_predict,
         "columns_train_on_dict": columns_train_on_dict,
     }
+
     # TODO: сохранение всех моделей, а не только последней, если их необходимо сохранять
-    if str(task_params['model_type_params']['save_model'])=='True':
+    if str(task_params['model_type_params']["save_model"])=='True':
         dict_to_save["kfold_model_dict"] = kfold_model_dict
 
-    if task_params['model_type_params']["save_kfold_predicts"]:
+    if str(task_params['model_type_params']["save_kfold_predicts"])=='True':
         dict_to_save["X_kfold_with_predict"] = X_kfold_with_predict
 
     return model, dict_to_save
@@ -264,11 +281,9 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
     model_type = task_params['model_type_params']["model_type"]
     model_kwargs = task_params['model_kwargs_params']
     # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
-
-    model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
     
-    print('clearml_module')
-    print(model_kwargs)
+    # print('clearml_module')
+    # print(model_kwargs)
     model_kwargs.update({key: to_numeric(value) for key, value in model_kwargs.items()})
     print(model_kwargs)
 
@@ -319,7 +334,6 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
     )
     
     return model, dict_to_save
-
 
 def clone_template(template_task_id, dataset_hyper_params_dict, model_type_hyper_params_dict, kflod_kwargs_hyper_params_dict, model_kwargs_params_dict=None,  queue_name='default'):
     template_task = Task.get_task(task_id=template_task_id)

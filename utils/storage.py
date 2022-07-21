@@ -42,7 +42,8 @@ class ClearMLStorage():
     def _load_params(self, **params):
         self.dataset_params = {
             "business_unit": "3990",
-            "analog_group": '150',
+            # "analog_group": '150',
+            "analog_group": '150-40', # 0707
             "window_size": 60,
             "split_date": "01.01.2021",
             # "n_predict" : 1,
@@ -58,7 +59,7 @@ class ClearMLStorage():
         self.model_type_params = {
             # "model_type": "Ridge",
             "model_type": "CatBoostRegressor",
-            "use_kfold": True,
+            "use_kfold": False,
             "save_kfold_predicts": True,
             "save_model": False,
         }
@@ -66,9 +67,9 @@ class ClearMLStorage():
 
         self.model_kwargs_params = {
             "alpha": 1.0,
-
+            
             "max_depth": 5,
-            "n_estimators": 100,
+            "n_estimators": 500,
 
             # "depth": 5,
             # "iterations": 200,
