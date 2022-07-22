@@ -23,6 +23,146 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_regression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import Lasso
+from sklearn.feature_selection import SelectFromModel
+from catboost import CatBoostRegressor
+from boruta import BorutaPy
+from BorutaShap import BorutaShap
+from sklearn.feature_selection import RFE
+
+class FeatureSelection:
+    def __init__(self, method='pearson', rfe=False, **kwargs) -> None:
+        self.rfe = rfe
+        self.method = method
+
+    # Функция для отбора признаков на основе корреляции Пирсона:
+    def _pearson_feature_selection(self, X: pd.DataFrame, y: pd.Series, n_features=100) -> pd.DataFrame:
+        
+        # Инициализация селектора признаков:
+        selector = SelectKBest(score_func=f_regression, k=n_features)
+        
+        # Применение селектора, оценка результата:
+        # X_selected = selector.fit_transform(X, y)
+        selector.fit(X, y)
+        
+        # Собираем обратно датасет в уже отфильтрованном виде:
+        # filtered_df = pd.DataFrame(columns=selector.get_feature_names_out(), index = X.index, data=X_selected)
+        filtered_df = X.iloc[:, selector.get_support()]
+        
+        return filtered_df
+
+    # Функция для фильтрации с помощью RF и Lasso с выбором только совпадающих признаков:
+    def _rf_lasso_feature_selection(self, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
+        
+        # Инициализируем и обучаем случайный лес:
+        rf_selector = RandomForestRegressor(n_estimators=500, random_state=1)
+        rf_selector.fit(X, y)
+        
+        # Вычисляем значения важности признаков:
+        feature_importances = rf_selector.feature_importances_
+        
+        # Собираем вспомогательный датафрейм с исходными колонками и значениями важности:
+        temp_df_rf = pd.DataFrame(columns=X.columns, data=[feature_importances])
+        
+        # Обучаем линейную регрессию с L1-регуляризацией:
+        l1_selector = Lasso(alpha=0.2, random_state=42, max_iter=10000).fit(X, y)
+        
+        # Собираем вспомогательный датафрейм с исходными колонками и значениями важности:
+        temp_df_l1 = pd.DataFrame(columns=X.columns, data=[l1_selector.coef_])
+        
+        # Найдём признаки, которые оставили и RF, и Lasso:
+        temp_df = pd.concat([temp_df_rf, temp_df_l1])
+        
+        # Оставляем из исходного датафрейма только важные колонки (признаки):
+        filtered_df = X.loc[:, (temp_df != 0).all(axis=0)]
+        
+        return filtered_df
+
+    # Функция для фильтрации с помощью Feature Importance из Catboost:
+    def _catboost_feature_selection(self, X: pd.DataFrame, y: pd.Series, n_features=100) -> pd.DataFrame:
+        
+        # Инициализируем и обучаем регрессор:
+        selector = CatBoostRegressor()
+        selector.fit(X = X, y = y, verbose=False)
+        
+        # Собираем вспомогательный датафрейм с исходными колонками и значениями важности:
+        feature_importances = pd.Series(selector.get_feature_importance(), X.columns)
+        
+        # Отбираем 100 признаков с самым большим значением важности:
+        selected_features = feature_importances.sort_values(ascending=False)[:n_features]
+        
+        # Оставляем из исходного датафрейма только важные колонки (признаки):
+        filtered_df = X.loc[:, selected_features.index]
+        
+        return filtered_df
+
+    # Функция для фильтрации с помощью Boruta:
+    def _boruta_feature_selection(self, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
+        
+        # Инициализация случайного леса в качестве эстиматора:
+        rf = RandomForestRegressor(n_jobs = -1, max_depth = 5)
+        
+        # Инициализация Boruta для отбора признаков:
+        selector = BorutaPy(rf, n_estimators='auto', verbose=0, random_state=1)
+
+        # Поиск всех релевантных признаков:
+        selector.fit(X.values, y.values)
+        
+        # Фильтруем датасет, чтобы получить итоговый вариант:
+        filtered_df = X.loc[:,selector.support_]
+        
+        return filtered_df
+
+    # Функция для фильтрации с помощью Boruta:
+    def _borutashap_feature_selection(self, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
+        
+        # # Инициализация Boruta для отбора признаков:
+        selector = BorutaShap(importance_measure='shap', classification=False)
+
+        # Поиск всех релевантных признаков:
+        selector.fit(X=X, y=y, n_trials=100, sample=False, verbose=False, random_state=0)
+        
+        # Получаем подвыборку в качестве итогового варианта:
+        filtered_df = selector.Subset()
+        
+        return filtered_df
+
+    def _rfe_feature_selection(X: pd.DataFrame, y: pd.Series, n_features=100) -> pd.DataFrame:
+        # Инициализация и обучение RFE в качестве селектора признаков:
+        selector = RFE(RandomForestRegressor(n_estimators=500, random_state=1),
+                    n_features_to_select=n_features,
+                    verbose=0)
+        features = selector.fit(X, y)
+        
+        # Фильтруем датасет, чтобы получить итоговый вариант:
+        filtered_df = X.loc[:, features.support_]
+        
+        return filtered_df
+
+    def filter_X(self, X, y, n_features=100, rfe_n_features=None):
+        # FIXME
+        if self.rfe and rfe_n_features is None:
+            rfe_n_features = n_features
+            n_features *= 2
+
+        if self.method == 'pearson':
+            new_X = self._pearson_feature_selection(X, y, n_features=n_features)
+        elif self.method == 'catboost':
+            new_X = self._catboost_feature_selection(X, y, n_features=n_features)
+        else:
+            raise ValueError("Unknown method")
+
+        if not self.rfe:
+            return new_X
+        
+        new_X = self._rfe_feature_selection(new_X, y, int(rfe_n_features))
+        return new_X
+
+
 def make_task(storage: ClearMLStorage):
     
     Task.add_requirements("pyarrow")
@@ -35,6 +175,7 @@ def make_task(storage: ClearMLStorage):
     task.connect(storage.model_type_params, 'model_type_params')
     task.connect(storage.model_kwargs_params, 'model_kwargs_params')
     task.connect(storage.kflod_kwargs_params, 'kflod_kwargs_params')
+    task.connect(storage.fs_kwargs_params, 'fs_kwargs_params')
     return task
 
 
@@ -195,7 +336,6 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
 
                 model_type=model_type,
                 model_kwargs=model_kwargs
-
             )
 
         # print("training kfold")
@@ -278,6 +418,8 @@ def train_with_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predi
 
 # def train_wo_cv(storage: ClearMLStorage, X_train, X_test, y_train, y_test, logger, n_predict):
 def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict):
+    dict_to_save = {}
+
     model_type = task_params['model_type_params']["model_type"]
     model_kwargs = task_params['model_kwargs_params']
     # model_kwargs.update({key: int(value) for key, value in model_kwargs.items() if (type(value)==str and value.isnumeric())})
@@ -305,17 +447,38 @@ def train_wo_cv(task_params, X_train, X_test, y_train, y_test, logger, n_predict
                        'business_unit', 'window_size']
     columns_to_drop += columns_for_deletion(X_train, startswith='predict')
     columns_train_on = list(set(X_train.columns) - set(columns_to_drop))
+    dict_to_save['columns_train_on'] = columns_train_on
+    X_train = X_train[columns_train_on]
 
-    model.fit(X_train[columns_train_on], y_train, verbose=False)
+    # FS 
+    if str(task_params['fs_kwargs_params']['use_fs'])=='True':
+        rfe = False if str(task_params['fs_kwargs_params']['rfe'])=='False' else True
+        method = task_params['fs_kwargs_params']['method']
+        n_features = int(task_params['fs_kwargs_params']['n_features'])
+        rfe_n_features = task_params['fs_kwargs_params'].get('rfe_n_features')
+
+        fs = FeatureSelection(method, rfe)
+        X_train = fs.filter_X(X_train, y_train, n_features=n_features, rfe_n_features=rfe_n_features)
+
+        columns_train_on = X_train.columns.tolist()
+
+        dict_to_save['columns_train_on_after_fs'] = columns_train_on
+
+
+
+    # model.fit(X_train[columns_train_on], y_train, verbose=False)
+    model.fit(X_train, y_train, verbose=False)
 
     predict = model.predict(X_test[columns_train_on])
     X_test_with_predict = X_test.copy()
     X_test_with_predict["model_predict"] = predict
 
-    dict_to_save = {
-        "columns_train_on": columns_train_on,
-        "X_test_with_predict": X_test_with_predict
-    }
+    dict_to_save['X_test_with_predict'] = X_test_with_predict
+
+    # dict_to_save = {
+    #     "columns_train_on": columns_train_on,
+    #     "X_test_with_predict": X_test_with_predict
+    # }
 
     if str(task_params['model_type_params']["save_model"])=='True':
         dict_to_save["model"] = model

@@ -1,10 +1,19 @@
+
 class ClearMLStorage():
     def __init__(self, project_name, task_name,
                  dataset_id, dataset_file_name=None,
+
+                use_fs=True,
+                 method_name='pearson',
+                n_features = 100,
+                use_rfe = False,
+                rfe_n_features=None,
                  **kwargs) -> None:
         self._set_task_params(project_name, task_name,
                               kwargs.get('task_type', 'training'))
         self._set_dataset(dataset_id, dataset_file_name)
+        self._set_fs(use_fs=use_fs, method_name=method_name, n_features=n_features, use_rfe=use_rfe, rfe_n_features=rfe_n_features, **kwargs)
+
         self._load_params(**kwargs)
         
         # 2806 change
@@ -38,6 +47,22 @@ class ClearMLStorage():
         self._dataset_file_name = dataset_file_name
         self.dataset = {"dataset_id": self._dataset_id,
                         "dataset_file_name": self._dataset_file_name}
+
+    def _set_fs(self, use_fs, method_name, n_features=100, use_rfe=False, rfe_n_features=None, **params):
+        self._use_fs = use_fs
+
+        self._method_name = method_name
+        self._n_features = n_features
+
+        self._use_rfe = use_rfe
+        self._rfe_n_features = rfe_n_features
+
+        self.fs_kwargs_params = {'use_fs': use_fs,
+                                'method': self._method_name,
+                                'n_features': self._n_features,
+                                'rfe': self._use_rfe,
+                                'rfe_n_features': self._rfe_n_features
+        }
 
     def _load_params(self, **params):
         self.dataset_params = {
